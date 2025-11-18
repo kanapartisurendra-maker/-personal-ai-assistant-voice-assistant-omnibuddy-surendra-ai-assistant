@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Personal AI Assistant - Demo</title>
+  <style>
+    body { font-family: system-ui, Arial; padding: 20px; background:#0f1724; color:#e6eef8; }
+    .card { background:#0b1220; padding:20px; border-radius:8px; max-width:700px; margin: 0 auto; }
+    button { padding:10px 14px; margin-right: 8px; }
+    textarea { width:100%; height:120px; margin-top:10px; color: #0b1220; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Personal AI Assistant (demo)</h2>
+    <div>
+      <button id="startRec">Start Recording</button>
+      <button id="stopRec" disabled>Stop</button>
+      <button id="sendText">Send Text</button>
+    </div>
+
+    <p>
+      <label>Text input:</label>
+      <textarea id="textInput" placeholder="Type a question or record voice..."></textarea>
+    </p>
+
+    <p>
+      <strong>Assistant reply:</strong>
+      <div id="reply" style="white-space:pre-wrap; background:#09202e; padding:10px; border-radius:6px; margin-top:8px;"></div>
+    </p>
+  </div>
+
+  <script>
+    const startBtn = document.getElementById('startRec');
+    const stopBtn = document.getElementById('stopRec');
+    const sendBtn = document.getElementById('sendText');
+    const textInput = document.getElementById('textInput');
+    const replyDiv = document.getElementById('reply');
+
+    let recognition = null;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new Rec();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.continuous = false;
+
+      recognition.onresult = (event) => {
+        const text = Array.from(event.results).map(r => r[0].transcript).join('');
+        textInput.value = (textInput.value ? textInput.value + ' ' : '') + text;
+      };
+      recognition.onerror = (e) => console.warn('recognition error', e);
+      recognition.onend = () => { startBtn.disabled = false; stopBtn.disabled = true; };
+    } else {
+      startBtn.disabled = true;
+      stopBtn.disabled = true;
+      startBtn.title = "Speech Recognition not supported in this browser";
+    }
+
+    startBtn.onclick = () => {
+      if (!recognition) return;
+      recognition.start();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+    };
+
+    stopBtn.onclick = () => {
+      if (recognition) recognition.stop();
+    };
+
+    async function sendTextToServer(text) {
+      replyDiv.textContent = '…thinking…';
+      try {
+        const res = await fetch('http://127.0.0.1:8000/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        if (!res.ok) {
+          const err = await res.text();
+          replyDiv.textContent = 'Error: ' + err;
+          return;
+        }
+        const data = await res.json();
+        replyDiv.textContent = data.text || '(no reply)';
+      } catch (err) {
+        replyDiv.textContent = 'Network error: ' + err.message;
+      }
+    }
+
+    sendBtn.onclick = () => {
+      const t = textInput.value.trim();
+      if (!t) {
+        replyDiv.textContent = 'Please type or record something first.';
+        return;
+      }
+      sendTextToServer(t);
+    };
+  </script>
+</body>
+</html>
